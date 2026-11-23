@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#173b57">
+<title>Moje delovne ure</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#17212b;background:#f2f5f7}
+body{margin:0;padding:16px;max-width:620px;margin:auto}
+header{background:#173b57;color:white;padding:18px;border-radius:16px;margin-bottom:14px}
+h1{font-size:23px;margin:0 0 5px} .muted{color:#637381;font-size:14px}
+header .muted{color:#d9e5ed}
+.card{background:white;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 2px 9px #0000000c}
+label{display:block;font-size:14px;font-weight:bold;margin:10px 0 5px}
+input,button{font:inherit;border-radius:10px;padding:12px;border:1px solid #cbd5dc;box-sizing:border-box}
+input{width:100%;background:white}
+button{border:0;background:#173b57;color:white;font-weight:bold;cursor:pointer}
+button.secondary{background:#e7edf1;color:#173b57}
+button.danger{background:#a93232}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.big{font-size:28px;font-weight:bold;margin:4px 0}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#f3f7f9;padding:12px;border-radius:10px}
+.stat small{display:block;color:#637381;margin-bottom:5px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{text-align:left;padding:9px 5px;border-bottom:1px solid #e5eaee}
+td:last-child{text-align:right}
+.actions{display:flex;gap:5px;justify-content:flex-end}
+.actions button{padding:7px 9px;font-size:12px}
+#status{font-weight:bold;margin-top:10px;color:#17623b}
+</style>
+</head>
+<body>
+<header><h1>Moje delovne ure</h1><div class="muted">Preprost pregled ur – brez odbitka malice.</div></header>
+
+<section class="card">
+ <div class="row">
+  <div><label for="month">Mesec</label><input id="month" type="month"></div>
+  <div><label for="target">Mesečni cilj (ur)</label><input id="target" type="number" min="1" step="1" value="160"></div>
+ </div>
+ <div class="stats" style="margin-top:14px">
+  <div class="stat"><small>Opravljene ure</small><div class="big" id="done">0,00</div></div>
+  <div class="stat"><small>Do cilja manjka</small><div class="big" id="left">160,00</div></div>
+  <div class="stat"><small>Delovnih dni do konca meseca*</small><div class="big" id="days">0</div></div>
+  <div class="stat"><small>Potrebno povprečje na dan</small><div class="big" id="average">0,00</div></div>
+ </div>
+ <p class="muted">* Šteje ponedeljek–petek, od jutri naprej oziroma od današnjega dne, če še nimaš vnosa.</p>
+</section>
+
+<section class="card">
+ <h2 style="font-size:18px;margin-top:0">Vnos delovnega dne</h2>
+ <label for="date">Datum</label><input id="date" type="date">
+ <div class="row">
+  <div><label for="start">Začetek</label><input id="start" type="time"></div>
+  <div><label for="end">Konec</label><input id="end" type="time"></div>
+ </div>
+ <div class="row" style="margin-top:12px">
+  <button id="save">Shrani ure</button>
+  <button class="secondary" id="nowStart">ZAČETEK zdaj</button>
+ </div>
+ <button class="secondary" id="nowEnd" style="width:100%;margin-top:8px">KONEC zdaj</button>
+ <div id="status" aria-live="polite"></div>
+ <p class="muted">Vnesi začetek in konec. Celoten čas se šteje, malica se ne odšteva. Če je konec po polnoči, se prav tako pravilno izračuna.</p>
+</section>
+
+<section class="card">
+ <h2 style="font-size:18px;margin-top:0">Vnosi za izbrani mesec</h2>
+ <div id="entries"></div>
+</section>
+<script>
+const $=id=>document.getElementById(id);
+const KEY='moje-delovne-ure-v1';
+let records=JSON.parse(localStorage.getItem(KEY)||'{}');
+let editDate=null;
+const pad=n=>String(n).padStart(2,'0');
+const today=()=>{let d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
+const monthNow=()=>today().slice(0,7);
+$('month').value=monthNow();$('date').value=today();
+function saveAll(){localStorage.setItem(KEY,JSON.stringify(records));render()}
+function hours(r){let [sh,sm]=r.start.split(':').map(Number),[eh,em]=r.end.split(':').map(Number);let mins=eh*60+em-(sh*60+sm);if(mins<0)mins+=1440;return mins/60}
+function fmt(n){return n.toLocaleString('sl-SI',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function render(){
+ const m=$('month').value||monthNow(),target=Math.max(0,Number($('target').value)||0);
+ const list=Object.keys(records).filter(d=>d.startsWith(m)).sort();
+ const total=list.reduce((s,d)=>s+hours(records[d]),0),left=Math.max(0,target-total);
+ const [y,mo]=m.split('-').map(Number),last=new Date(y,mo,0).getDate();
+ let days=0;const todayStr=today();
+ for(let day=1;day<=last;day++){let dt=new Date(y,mo-1,day),ds=`${y}-${pad(mo)}-${pad(day)}`;if(dt.getDay()!==0&&dt.getDay()!==6&&ds>=todayStr&&!records[ds])days++}
+ $('done').textContent=fmt(total);$('left').textContent=fmt(left);$('days').textContent=days;$('average').textContent=fmt(days?left/days:left);
+ $('entries').innerHTML=list.length?`<table><thead><tr><th>Datum</th><th>Čas</th><th>Ure</th><th></th></tr></thead><tbody>${list.map(d=>`<tr><td>${d.slice(8,10)}.${d.slice(5,7)}.</td><td>${records[d].start}–${records[d].end}</td><td>${fmt(hours(records[d]))}</td><td><div class="actions"><button class="secondary" data-edit="${d}">Uredi</button><button class="danger" data-del="${d}">Izbriši</button></div></td></tr>`).join('')}</tbody></table>`:'<p class="muted">Za ta mesec še ni vnosov.</p>';
+ document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{let d=b.dataset.edit;editDate=d;$('date').value=d;$('start').value=records[d].start;$('end').value=records[d].end;$('status').textContent='Urejaš vnos za '+d});
+ document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{let d=b.dataset.del;if(confirm('Izbrišem vnos za '+d+'?')){delete records[d];saveAll()}});
+}
+$('save').onclick=()=>{let d=$('date').value,s=$('start').value,e=$('end').value;if(!d||!s||!e){$('status').textContent='Vnesi datum, začetek in konec.';return}records[d]={start:s,end:e};$('month').value=d.slice(0,7);editDate=null;saveAll();$('status').textContent='Ure so shranjene.'};
+$('nowStart').onclick=()=>{$('date').value=today();let d=new Date();$('start').value=pad(d.getHours())+':'+pad(d.getMinutes());$('status').textContent='Začetek je vpisan. Ob koncu pritisni KONEC zdaj.'};
+$('nowEnd').onclick=()=>{let d=new Date();$('end').value=pad(d.getHours())+':'+pad(d.getMinutes());$('status').textContent='Konec je vpisan. Pritisni Shrani ure.'};
+$('month').onchange=render;$('target').oninput=render;render();
+</script>
+</body></html>
